@@ -816,6 +816,7 @@ const StudentActivities = () => {
     const [file, setFile] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
+    const [cancelTarget, setCancelTarget] = useState(null);
 
     const myClassesIds = enrollments.filter(e => e.studentId === user.id).map(e => e.classId);
     const available = activities.filter(a => myClassesIds.includes(a.classId));
@@ -890,7 +891,7 @@ const StudentActivities = () => {
             <h2 className="text-2xl font-black text-[#1e1b4b] pb-4">Quadro de Atividades</h2>
             <div className="grid grid-cols-1 gap-6">
                 {available.slice().reverse().map(act => {
-                    const hasSubmitted = submissions.some(s => s.activityId === act.id && s.studentId === user.id);
+                    const mySubmission = submissions.find(s => s.activityId === act.id && s.studentId === user.id);
 
                     return (
                         <Card key={act.id} className="flex flex-col md:flex-row gap-0 p-0 border-l-4 border-l-[#eab308]">
@@ -910,10 +911,15 @@ const StudentActivities = () => {
                             
                             {act.requiresSubmission !== false ? (
                                 <div className="md:w-64 bg-stone-50 p-6 border-l border-yellow-100 flex flex-col justify-center gap-3 shrink-0">
-                                    {hasSubmitted ? (
-                                        <div className="text-center p-3 border border-[#16a34a]/30 bg-[#16a34a]/10 rounded-lg">
-                                            <Icon name="check-circle" className="w-6 h-6 text-[#16a34a] mx-auto mb-1"/>
-                                            <p className="text-xs font-bold text-[#16a34a] uppercase">Enviado</p>
+                                    {mySubmission ? (
+                                        <div className="flex flex-col gap-2">
+                                            <div className="text-center p-3 border border-[#16a34a]/30 bg-[#16a34a]/10 rounded-lg">
+                                                <Icon name="check-circle" className="w-6 h-6 text-[#16a34a] mx-auto mb-1"/>
+                                                <p className="text-xs font-bold text-[#16a34a] uppercase">Enviado</p>
+                                            </div>
+                                            <Button variant="secondary" className="text-xs py-2 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300" onClick={() => setCancelTarget(mySubmission.id)}>
+                                                Desfazer Envio
+                                            </Button>
                                         </div>
                                     ) : (
                                         <Button className="w-full bg-[#f97316] hover:bg-orange-600 text-white" onClick={() => { setSelectedActivity(act); setErrorMsg(''); }}>Responder Agora</Button>
@@ -988,6 +994,23 @@ const StudentActivities = () => {
                         </Button>
                     </div>
                 </form>
+            </Modal>
+
+            <Modal isOpen={!!cancelTarget} onClose={() => setCancelTarget(null)} title="Desfazer Envio">
+                <div className="space-y-4">
+                    <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm font-bold shadow-sm">
+                        Atenção: Ao desfazer o envio, sua resposta atual (texto e arquivo anexado) será apagada permanentemente do sistema.
+                    </div>
+                    <p className="text-stone-600 text-sm font-medium">Tem certeza que deseja apagar sua resposta e fazer de novo?</p>
+                    
+                    <div className="flex justify-end gap-3 pt-4 border-t border-yellow-100 mt-2">
+                        <Button variant="secondary" onClick={() => setCancelTarget(null)}>Cancelar</Button>
+                        <Button variant="danger" onClick={async () => {
+                            await dbService.delete('submissions', cancelTarget);
+                            setCancelTarget(null);
+                        }}>Sim, Apagar Resposta</Button>
+                    </div>
+                </div>
             </Modal>
         </div>
     );
