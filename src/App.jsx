@@ -36,6 +36,15 @@ const dbService = {
     }
 };
 
+const convertFileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = (error) => reject(error);
+    });
+};
+
 const globalStyles = `
   * { box-sizing: border-box; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
   body { margin: 0; padding: 0; background-color: #fefce8; color: #1c1917; }
@@ -71,7 +80,8 @@ const Icon = ({ name, className = "w-5 h-5", onClick }) => {
         'chevron-right': <><polyline points="9 18 15 12 9 6"></polyline></>,
         'menu': <><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></>,
         'tag': <><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></>,
-        'eye': <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></>
+        'eye': <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></>,
+        'calendar': <><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></>
     };
     return (
         <svg onClick={onClick} className={`${className} ${onClick ? 'cursor-pointer hover:opacity-70 transition-opacity' : ''}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -135,7 +145,7 @@ const Modal = ({ isOpen, onClose, title, children }) => {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-2xl border border-yellow-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-fade-in">
-                <div className="px-6 py-5 border-b border-yellow-100 flex justify-between items-center shrink-0">
+                <div className="px-6 py-5 border-b border-yellow-100 flex justify-between items-center shrink-0 bg-white z-10">
                     <h3 className="text-lg font-bold text-[#1e1b4b]">{title}</h3>
                     <button type="button" onClick={onClose} className="text-stone-400 hover:text-stone-700 transition-colors p-1 bg-stone-50 rounded-md hover:bg-stone-100">
                         <Icon name="x" className="w-5 h-5" />
@@ -286,7 +296,7 @@ const ProfessorDashboard = ({ setCurrentView }) => {
                                             <p className="font-bold text-[#1e1b4b] text-sm">{act.title}</p>
                                             <p className="text-xs text-stone-500 mt-1 font-semibold">{cls?.name || 'Turma Excluída'} {act.subject ? `• ${act.subject}` : ''}</p>
                                         </div>
-                                        <Badge variant="orange">{act.value} pts</Badge>
+                                        <Badge variant="orange">{act.isGraded === false ? 'Visto' : `${act.value} pts`}</Badge>
                                     </div>
                                 );
                             })
@@ -533,14 +543,49 @@ const ProfessorStudents = () => {
 const ProfessorActivities = () => {
     const { activities, classes } = useContext(AppContext);
     const [isFormView, setIsFormView] = useState(false);
-    const [formData, setFormData] = useState({ id: null, title: '', classId: '', subject: '', dueDate: '', value: '', requiresSubmission: true });
+    const [errorMsg, setErrorMsg] = useState('');
+    
+    // Estado com suporte a visto e material de apoio
+    const [formData, setFormData] = useState({ 
+        id: null, title: '', classId: '', subject: '', dueDate: '', 
+        value: '', requiresSubmission: true, isGraded: true, 
+        materialFileName: '', materialFileData: '' 
+    });
+    
+    const [filterClassId, setFilterClassId] = useState('');
 
     const selectedClassObj = classes.find(c => c.id === formData.classId);
+    const filteredActivities = filterClassId ? activities.filter(a => a.classId === filterClassId) : activities;
+
+    const handleMaterialChange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            if (file.size > 800 * 1024) {
+                setErrorMsg("O material de apoio deve ter no máximo 800 KB.");
+                e.target.value = '';
+                return;
+            }
+            setErrorMsg('');
+            try {
+                const base64 = await convertFileToBase64(file);
+                setFormData({...formData, materialFileName: file.name, materialFileData: base64});
+            } catch (err) {
+                setErrorMsg("Erro ao processar arquivo.");
+            }
+        }
+    };
 
     const handleSave = (e) => {
         e.preventDefault();
-        if (formData.id) dbService.update('activities', formData.id, formData);
-        else dbService.add('activities', formData);
+        
+        // Se for visto (sem nota), limpa o valor para não bagunçar
+        const dataToSave = { ...formData };
+        if (!dataToSave.isGraded) {
+            dataToSave.value = 0;
+        }
+
+        if (formData.id) dbService.update('activities', formData.id, dataToSave);
+        else dbService.add('activities', dataToSave);
         setIsFormView(false);
     };
 
@@ -556,7 +601,13 @@ const ProfessorActivities = () => {
 
                 <Card>
                     <form onSubmit={handleSave} className="space-y-5">
-                        <Input label="Título da Avaliação" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} required />
+                        {errorMsg && (
+                            <div className="p-3 bg-red-50 text-red-700 text-sm border border-red-200 rounded-lg font-bold">
+                                {errorMsg}
+                            </div>
+                        )}
+                        
+                        <Input label="Título da Atividade" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} required />
                         
                         <div>
                             <label className="block text-sm font-bold text-stone-700 mb-1.5">Turma de Aplicação</label>
@@ -581,16 +632,49 @@ const ProfessorActivities = () => {
                         )}
 
                         <div className="grid grid-cols-2 gap-4">
-                            <Input type="date" label="Data de Aplicação/Entrega" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} />
-                            <Input type="number" label="Valor Máximo (pts)" value={formData.value} onChange={e => setFormData({...formData, value: e.target.value})} required />
+                            <Input type="date" label="Data Limite" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} />
+                            
+                            <div className="flex flex-col justify-end pb-4">
+                                <label className="flex items-center gap-2 cursor-pointer p-2 border border-green-200 bg-green-50 rounded-lg transition-colors hover:bg-green-100">
+                                    <input type="checkbox" checked={formData.isGraded} onChange={e => setFormData({...formData, isGraded: e.target.checked})} className="w-4 h-4 text-[#16a34a]"/> 
+                                    <span className="text-sm font-bold text-[#16a34a]">Atividade Vale Nota?</span>
+                                </label>
+                            </div>
                         </div>
-                        
-                        <div className="p-5 bg-yellow-50 border border-yellow-200 rounded-xl">
+
+                        {formData.isGraded && (
+                            <div className="animate-fade-in">
+                                <Input type="number" label="Valor Máximo (pts)" value={formData.value} onChange={e => setFormData({...formData, value: e.target.value})} required />
+                            </div>
+                        )}
+
+                        <div className="p-5 bg-indigo-50 border border-indigo-200 rounded-xl">
+                            <label className="block text-sm font-bold text-indigo-900 mb-2">Anexar Material de Apoio (Opcional)</label>
+                            <p className="text-xs text-indigo-700 mb-3">Envie um arquivo (PDF, Word, Imagem) para os alunos usarem nesta atividade. Limite: 800KB.</p>
+                            
+                            <div className="flex items-center gap-3">
+                                <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-white text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg text-sm font-bold transition-colors">
+                                    <Icon name="upload" className="w-4 h-4"/> Escolher arquivo
+                                    <input type="file" className="hidden" onChange={handleMaterialChange} accept=".pdf,.docx,.txt,.jpeg,.jpg,.png" />
+                                </label>
+                                <span className="text-sm text-indigo-900 font-medium truncate flex-1">
+                                    {formData.materialFileName ? formData.materialFileName : 'Nenhum material anexado.'}
+                                </span>
+                            </div>
+                            
+                            {formData.materialFileName && (
+                                <button type="button" onClick={() => setFormData({...formData, materialFileName: '', materialFileData: ''})} className="mt-2 text-xs text-red-600 font-bold hover:underline">
+                                    Remover anexo
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="p-5 bg-yellow-50 border border-yellow-200 rounded-xl mt-4">
                             <label className="flex items-start gap-3 cursor-pointer">
                                 <input type="checkbox" checked={formData.requiresSubmission} onChange={e => setFormData({...formData, requiresSubmission: e.target.checked})} className="mt-1 w-5 h-5 text-[#16a34a] border-yellow-300 rounded focus:ring-[#16a34a]"/> 
                                 <div>
-                                    <span className="block text-sm font-bold text-[#1e1b4b]">Exige Envio Digital (Texto/Arquivo)</span>
-                                    <span className="block text-xs font-medium text-stone-500 mt-1">Desmarque esta opção se for uma avaliação apenas presencial.</span>
+                                    <span className="block text-sm font-bold text-[#1e1b4b]">Exige Envio Digital do Aluno</span>
+                                    <span className="block text-xs font-medium text-stone-500 mt-1">Desmarque se for apenas leitura ou avaliação em sala física.</span>
                                 </div>
                             </label>
                         </div>
@@ -607,33 +691,54 @@ const ProfessorActivities = () => {
 
     return (
         <div className="space-y-6 animate-fade-in">
-            <div className="flex justify-between items-center pb-4">
-                <h2 className="text-2xl font-black text-[#1e1b4b]">Avaliações</h2>
-                <Button onClick={() => { setFormData({ id: null, title: '', classId: '', subject: '', dueDate: '', value: '', requiresSubmission: true }); setIsFormView(true); }} icon="plus">Publicar Nova</Button>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4">
+                <h2 className="text-2xl font-black text-[#1e1b4b]">Atividades Publicadas</h2>
+                <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                    <select
+                        className="px-4 py-2 bg-white border border-yellow-200 rounded-lg text-sm font-bold text-stone-700 focus:ring-2 focus:ring-[#16a34a] outline-none shadow-sm"
+                        value={filterClassId}
+                        onChange={e => setFilterClassId(e.target.value)}
+                    >
+                        <option value="">Todas as Turmas</option>
+                        {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <Button onClick={() => { setFormData({ id: null, title: '', classId: '', subject: '', dueDate: '', value: '', requiresSubmission: true, isGraded: true, materialFileName: '', materialFileData: '' }); setIsFormView(true); }} icon="plus">Publicar Nova</Button>
+                </div>
             </div>
 
             <div className="grid-auto-cards">
-                {activities.slice().reverse().map(act => {
+                {filteredActivities.slice().reverse().map(act => {
                     const cls = classes.find(c => c.id === act.classId);
                     return (
-                        <Card key={act.id} className="hover:border-[#16a34a] border-t-4 border-t-[#16a34a]">
+                        <Card key={act.id} className={`hover:border-[#16a34a] border-t-4 ${act.isGraded === false ? 'border-t-slate-400' : 'border-t-[#16a34a]'}`}>
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex gap-2">
-                                    <Badge variant="emerald">{act.value} pts</Badge>
-                                    {!act.requiresSubmission && <Badge variant="slate">Presencial</Badge>}
+                                    {act.isGraded === false ? (
+                                        <Badge variant="slate">Visto (Sem Nota)</Badge>
+                                    ) : (
+                                        <Badge variant="emerald">{act.value} pts</Badge>
+                                    )}
                                 </div>
                                 <div className="flex gap-1 -mt-2 -mr-2">
-                                    <button type="button" onClick={() => { setFormData(act); setIsFormView(true); }} className="text-stone-400 hover:text-[#f97316] p-2 rounded-lg hover:bg-orange-50 transition-colors"><Icon name="edit" className="w-4 h-4"/></button>
+                                    <button type="button" onClick={() => { setFormData({...act, isGraded: act.isGraded !== false}); setIsFormView(true); }} className="text-stone-400 hover:text-[#f97316] p-2 rounded-lg hover:bg-orange-50 transition-colors"><Icon name="edit" className="w-4 h-4"/></button>
                                     <button type="button" onClick={() => handleDelete(act.id)} className="text-stone-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors"><Icon name="trash" className="w-4 h-4"/></button>
                                 </div>
                             </div>
                             <h3 className="font-black text-lg text-[#1e1b4b] leading-tight">{act.title}</h3>
                             <p className="text-sm font-bold text-stone-500 mt-1.5">{cls?.name}</p>
+                            
                             {act.subject && (
                                 <div className="mt-2 flex items-center text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded w-max">
                                     <Icon name="tag" className="w-3 h-3 mr-1" /> {act.subject}
                                 </div>
                             )}
+
+                            {act.materialFileName && (
+                                <div className="mt-3 flex items-center gap-2 text-xs font-bold text-indigo-700">
+                                    <Icon name="file-text" className="w-4 h-4" /> Material Anexado
+                                </div>
+                            )}
+
                             <div className="mt-4 pt-4 flex items-center text-xs font-bold uppercase tracking-wide text-stone-400 gap-2 border-t border-yellow-100">
                                 <Icon name="clock" className="w-4 h-4" /> 
                                 {act.dueDate ? new Date(act.dueDate).toLocaleDateString('pt-BR',{timeZone:'UTC'}) : 'Sem prazo limite'}
@@ -648,38 +753,50 @@ const ProfessorActivities = () => {
 
 const ProfessorGrading = () => {
     const { activities, classes, allStudents, enrollments, grades, submissions } = useContext(AppContext);
+    const [selectedClassId, setSelectedClassId] = useState('');
+    const [selectedSubject, setSelectedSubject] = useState('');
     const [selectedActivity, setSelectedActivity] = useState('');
     const [viewSubmission, setViewSubmission] = useState(null);
 
     const currentAct = activities.find(a => a.id === selectedActivity);
+    const selectedClassObj = classes.find(c => c.id === selectedClassId);
+    
     const studentsInClass = useMemo(() => {
         if (!currentAct) return [];
         const classEnrolls = enrollments.filter(e => e.classId === currentAct.classId).map(e => e.studentId);
         return allStudents.filter(s => classEnrolls.includes(s.id)).sort((a,b) => a.name.localeCompare(b.name));
     }, [currentAct, enrollments, allStudents]);
 
-    // Função que intercepta a nota e aplica limites
     const handleGrade = (studentId, rawValue, e) => {
         const existing = grades.find(g => g.activityId === currentAct.id && g.studentId === studentId);
         
-        // Se apagar o valor da caixa (deixar vazio), removemos a nota do banco
+        // Se apagar o valor
         if (rawValue === '') {
             if (existing) dbService.delete('grades', existing.id);
+            if (e) e.target.value = '';
             return;
         }
 
+        // Se for atividade de visto
+        if (currentAct.isGraded === false) {
+            if (existing) {
+                if (existing.grade !== 'Visto') dbService.update('grades', existing.id, { grade: 'Visto' });
+            } else {
+                dbService.add('grades', { activityId: currentAct.id, studentId: studentId, classId: currentAct.classId, grade: 'Visto' });
+            }
+            return;
+        }
+
+        // Lógica de nota numérica
         let numValue = Number(rawValue);
         const maxVal = Number(currentAct.value);
         
-        // Aplica os limites: Não menor que 0, não maior que o máximo da atividade
         if (numValue < 0) numValue = 0;
         if (numValue > maxVal) numValue = maxVal;
         
-        // Atualiza a interface visualmente caso o professor tenha digitado um valor fora dos limites
         if (e) e.target.value = numValue;
 
         if (existing) {
-            // Só salva se realmente for diferente para poupar requisições
             if (existing.grade !== numValue) dbService.update('grades', existing.id, { grade: numValue });
         } else {
             dbService.add('grades', { activityId: currentAct.id, studentId: studentId, classId: currentAct.classId, grade: numValue });
@@ -689,25 +806,72 @@ const ProfessorGrading = () => {
     return (
         <div className="space-y-6 animate-fade-in">
             <div className="pb-4 border-b border-yellow-200">
-                <h2 className="text-2xl font-black text-[#1e1b4b]">Lançamento de Notas</h2>
+                <h2 className="text-2xl font-black text-[#1e1b4b]">Lançamento de Notas / Vistos</h2>
             </div>
             
-            <div className="max-w-xl">
-                <label className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Filtrar por Avaliação:</label>
-                <select className="w-full px-4 py-3.5 bg-white border border-yellow-200 rounded-xl text-sm font-bold text-[#1e1b4b] focus:ring-2 focus:ring-[#1e1b4b] focus:border-[#1e1b4b] outline-none shadow-sm" value={selectedActivity} onChange={e => setSelectedActivity(e.target.value)}>
-                    <option value="">-- Escolha uma avaliação na lista --</option>
-                    {activities.map(a => <option key={a.id} value={a.id}>{a.title} {a.subject ? `(${a.subject})` : ''} - {classes.find(c=>c.id===a.classId)?.name}</option>)}
-                </select>
+            <div className="max-w-2xl grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={selectedClassObj && selectedClassObj.subjects?.length > 0 ? "" : "md:col-span-2"}>
+                    <label className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Filtrar por Turma:</label>
+                    <select 
+                        className="w-full px-4 py-3.5 bg-white border border-yellow-200 rounded-xl text-sm font-bold text-[#1e1b4b] focus:ring-2 focus:ring-[#1e1b4b] outline-none shadow-sm" 
+                        value={selectedClassId} 
+                        onChange={e => {
+                            setSelectedClassId(e.target.value);
+                            setSelectedSubject('');
+                            setSelectedActivity('');
+                        }}
+                    >
+                        <option value="">-- Todas as turmas --</option>
+                        {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                </div>
+                
+                {selectedClassObj && selectedClassObj.subjects && selectedClassObj.subjects.length > 0 && (
+                    <div className="animate-fade-in">
+                        <label className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Filtrar por Matéria:</label>
+                        <select 
+                            className="w-full px-4 py-3.5 bg-white border border-yellow-200 rounded-xl text-sm font-bold text-[#1e1b4b] focus:ring-2 focus:ring-[#1e1b4b] outline-none shadow-sm" 
+                            value={selectedSubject} 
+                            onChange={e => {
+                                setSelectedSubject(e.target.value);
+                                setSelectedActivity('');
+                            }}
+                        >
+                            <option value="">-- Todas as matérias --</option>
+                            {selectedClassObj.subjects.map((sub, idx) => <option key={idx} value={sub}>{sub}</option>)}
+                        </select>
+                    </div>
+                )}
+                
+                <div className="md:col-span-2">
+                    <label className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Escolher Avaliação / Atividade:</label>
+                    <select 
+                        className="w-full px-4 py-3.5 bg-white border border-yellow-200 rounded-xl text-sm font-bold text-[#1e1b4b] focus:ring-2 focus:ring-[#1e1b4b] outline-none shadow-sm" 
+                        value={selectedActivity} 
+                        onChange={e => setSelectedActivity(e.target.value)}
+                    >
+                        <option value="">-- Escolha na lista --</option>
+                        {activities
+                            .filter(a => selectedClassId === '' || a.classId === selectedClassId)
+                            .filter(a => selectedSubject === '' || a.subject === selectedSubject)
+                            .map(a => <option key={a.id} value={a.id}>{a.title} {a.isGraded === false ? '[VISTO]' : ''} - {classes.find(c=>c.id===a.classId)?.name}</option>)
+                        }
+                    </select>
+                </div>
             </div>
 
             {currentAct && (
-                <Card noPadding className="mt-4 border-t-4 border-t-[#1e1b4b]">
+                <Card noPadding className={`mt-4 border-t-4 ${currentAct.isGraded === false ? 'border-t-slate-500' : 'border-t-[#1e1b4b]'}`}>
                     <div className="p-6 border-b border-yellow-100 bg-yellow-50/50">
                         <div className="flex gap-2 items-center mb-2">
                             <h3 className="font-black text-xl text-[#1e1b4b]">{currentAct.title}</h3>
                             {currentAct.subject && <Badge variant="indigo">{currentAct.subject}</Badge>}
                         </div>
-                        <p className="text-sm font-bold text-stone-500 uppercase tracking-wide">Valor Máximo: {currentAct.value} pts</p>
+                        {currentAct.isGraded === false ? (
+                            <p className="text-sm font-bold text-stone-500 uppercase tracking-wide">Atividade Formativa (Apenas Visto)</p>
+                        ) : (
+                            <p className="text-sm font-bold text-stone-500 uppercase tracking-wide">Valor Máximo: {currentAct.value} pts</p>
+                        )}
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm whitespace-nowrap">
@@ -715,9 +879,11 @@ const ProfessorGrading = () => {
                                 <tr>
                                     <th className="px-6 py-4 font-bold text-stone-500 uppercase tracking-wider text-xs">Aluno</th>
                                     {currentAct.requiresSubmission !== false && (
-                                        <th className="px-6 py-4 font-bold text-stone-500 uppercase tracking-wider text-xs">Resposta Enviada</th>
+                                        <th className="px-6 py-4 font-bold text-stone-500 uppercase tracking-wider text-xs">Resposta do Aluno</th>
                                     )}
-                                    <th className="px-6 py-4 font-bold text-stone-500 uppercase tracking-wider text-xs w-48 text-center">Nota Obtida</th>
+                                    <th className="px-6 py-4 font-bold text-stone-500 uppercase tracking-wider text-xs w-48 text-center">
+                                        {currentAct.isGraded === false ? "Visto" : "Nota Obtida"}
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-yellow-100">
@@ -742,14 +908,23 @@ const ProfessorGrading = () => {
                                             )}
 
                                             <td className="px-6 py-4 text-center">
-                                                <input type="number" 
-                                                    min="0"
-                                                    max={currentAct.value}
-                                                    className="w-24 px-3 py-2 border border-yellow-300 rounded-lg text-center font-black text-lg text-[#1e1b4b] focus:border-[#1e1b4b] focus:ring-2 focus:ring-[#1e1b4b] outline-none shadow-sm bg-white" 
-                                                    defaultValue={grade?.grade !== undefined ? grade.grade : ''} 
-                                                    onBlur={e => handleGrade(s.id, e.target.value, e)} 
-                                                    placeholder="-" 
-                                                />
+                                                {currentAct.isGraded === false ? (
+                                                    <button
+                                                        onClick={() => handleGrade(s.id, grade?.grade === 'Visto' ? '' : 'Visto')}
+                                                        className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm ${grade?.grade === 'Visto' ? 'bg-[#16a34a] text-white border border-transparent' : 'bg-white text-stone-600 border border-stone-300 hover:bg-stone-50'}`}
+                                                    >
+                                                        {grade?.grade === 'Visto' ? ( <><Icon name="check-circle" className="w-3 h-3 inline mr-1 -mt-0.5"/> Dado</>) : 'Dar Visto'}
+                                                    </button>
+                                                ) : (
+                                                    <input type="number" 
+                                                        min="0"
+                                                        max={currentAct.value}
+                                                        className="w-24 px-3 py-2 border border-yellow-300 rounded-lg text-center font-black text-lg text-[#1e1b4b] focus:border-[#1e1b4b] focus:ring-2 focus:ring-[#1e1b4b] outline-none shadow-sm bg-white" 
+                                                        defaultValue={grade?.grade !== undefined ? grade.grade : ''} 
+                                                        onBlur={e => handleGrade(s.id, e.target.value, e)} 
+                                                        placeholder="-" 
+                                                    />
+                                                )}
                                             </td>
                                         </tr>
                                     );
@@ -764,7 +939,9 @@ const ProfessorGrading = () => {
                 {viewSubmission && (
                     <div className="space-y-4">
                         <div className="p-4 bg-white border border-yellow-200 rounded-xl">
-                            <p className="text-xs font-bold text-stone-500 uppercase mb-2">Texto da Resposta:</p>
+                            <p className="text-xs font-bold text-stone-500 uppercase mb-2">
+                                {currentAct?.isGraded === false ? 'Conclusão / Comentário do Aluno:' : 'Texto da Resposta:'}
+                            </p>
                             <p className="text-sm text-stone-800 whitespace-pre-wrap">{viewSubmission.sub.textResponse || 'Nenhum texto digitado.'}</p>
                         </div>
                         
@@ -789,19 +966,136 @@ const ProfessorGrading = () => {
     );
 };
 
+const ProfessorExams = () => {
+    const { exams, classes } = useContext(AppContext);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [formData, setFormData] = useState({ id: null, title: '', classId: '', subject: '', examDate: '' });
+
+    const selectedClassObj = classes.find(c => c.id === formData.classId);
+
+    const handleSave = (e) => {
+        e.preventDefault();
+        if (formData.id) dbService.update('exams', formData.id, formData);
+        else dbService.add('exams', formData);
+        setIsModalOpen(false);
+    };
+
+    const handleDelete = (id) => dbService.delete('exams', id);
+
+    return (
+        <div className="space-y-6 animate-fade-in">
+            <div className="flex justify-between items-center pb-4 border-b border-yellow-200">
+                <h2 className="text-2xl font-black text-[#1e1b4b]">Agenda de Provas</h2>
+                <Button onClick={() => { setFormData({ id: null, title: '', classId: '', subject: '', examDate: '' }); setIsModalOpen(true); }} icon="plus">Marcar Prova</Button>
+            </div>
+
+            <div className="grid-auto-cards">
+                {(exams || []).slice().sort((a,b) => new Date(a.examDate) - new Date(b.examDate)).map(exam => {
+                    const cls = classes.find(c => c.id === exam.classId);
+                    return (
+                        <Card key={exam.id} className="hover:border-indigo-500 border-l-4 border-l-indigo-600 transition-all">
+                            <div className="flex justify-between items-start mb-2">
+                                <h3 className="font-black text-lg text-[#1e1b4b] leading-tight">{exam.title}</h3>
+                                <div className="flex gap-1 -mt-1 -mr-2">
+                                    <button type="button" onClick={() => { setFormData(exam); setIsModalOpen(true); }} className="text-stone-400 hover:text-[#f97316] p-1.5 rounded-lg hover:bg-orange-50 transition-colors"><Icon name="edit" className="w-4 h-4"/></button>
+                                    <button type="button" onClick={() => handleDelete(exam.id)} className="text-stone-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"><Icon name="trash" className="w-4 h-4"/></button>
+                                </div>
+                            </div>
+                            <p className="text-sm font-bold text-stone-500 mb-2">{cls?.name} {exam.subject && `• ${exam.subject}`}</p>
+                            <div className="mt-4 pt-4 border-t border-yellow-100 flex items-center gap-2 text-indigo-700 font-black text-sm bg-indigo-50 p-3 rounded-lg">
+                                <Icon name="calendar" className="w-5 h-5" />
+                                {exam.examDate ? new Date(exam.examDate + 'T12:00:00Z').toLocaleDateString('pt-BR') : 'Sem data definida'}
+                            </div>
+                        </Card>
+                    );
+                })}
+                {(!exams || exams.length === 0) && (
+                    <div className="col-span-full p-8 text-center text-stone-500 font-bold bg-white rounded-xl border border-yellow-200">
+                        Nenhuma prova agendada no momento.
+                    </div>
+                )}
+            </div>
+
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={formData.id ? "Editar Prova" : "Marcar Nova Prova"}>
+                <form onSubmit={handleSave} className="space-y-4">
+                    <Input label="Título (Ex: Prova Bimestral)" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Nome da avaliação..." required />
+                    
+                    <div>
+                        <label className="block text-sm font-bold text-stone-700 mb-1.5">Turma</label>
+                        <select className="w-full px-4 py-2.5 bg-white border border-yellow-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-[#f97316] outline-none shadow-sm" 
+                            value={formData.classId} onChange={e => setFormData({...formData, classId: e.target.value, subject: ''})} required>
+                            <option value="">Selecione a turma...</option>
+                            {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                    </div>
+
+                    {selectedClassObj && selectedClassObj.subjects && selectedClassObj.subjects.length > 0 && (
+                        <div className="animate-fade-in">
+                            <label className="block text-sm font-bold text-stone-700 mb-1.5">Matéria</label>
+                            <select className="w-full px-4 py-2.5 bg-white border border-yellow-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-[#f97316] outline-none shadow-sm" 
+                                value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} required>
+                                <option value="">Selecione a matéria...</option>
+                                {selectedClassObj.subjects.map((sub, idx) => <option key={idx} value={sub}>{sub}</option>)}
+                            </select>
+                        </div>
+                    )}
+
+                    <Input type="date" label="Data da Prova" value={formData.examDate} onChange={e => setFormData({...formData, examDate: e.target.value})} required />
+
+                    <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-yellow-100">
+                        <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+                        <Button type="submit">Salvar Agendamento</Button>
+                    </div>
+                </form>
+            </Modal>
+        </div>
+    );
+};
+
 const StudentDashboard = ({ setCurrentView }) => {
-    const { user, enrollments, grades, activities } = useContext(AppContext);
+    const { user, enrollments, grades, activities, exams, classes } = useContext(AppContext);
     const myClassesIds = enrollments.filter(e => e.studentId === user.id).map(e => e.classId);
+    
+    // Pegar provas
+    const myExams = (exams || [])
+        .filter(e => myClassesIds.includes(e.classId))
+        .sort((a, b) => new Date(a.examDate) - new Date(b.examDate));
+
+    // Pegar notas que não sejam 'Visto'
+    const notasReais = grades.filter(g => g.studentId === user.id && g.grade !== 'Visto').length;
     
     return (
         <div className="space-y-8 animate-fade-in">
             <h2 className="text-3xl font-black text-[#1e1b4b] tracking-tight">Olá, {user.name.split(' ')[0]}</h2>
+            
             <div className="grid-auto-cards">
                 <MetricCard title="Minhas Turmas" value={myClassesIds.length} icon="book" />
                 <MetricCard title="Tarefas" value={activities.filter(a => myClassesIds.includes(a.classId)).length} icon="file-text" onClick={() => setCurrentView('activities')} />
-                <MetricCard title="Notas Lançadas" value={grades.filter(g=>g.studentId===user.id).length} icon="check-circle" onClick={() => setCurrentView('grades')} />
+                <MetricCard title="Notas Lançadas" value={notasReais} icon="check-circle" onClick={() => setCurrentView('grades')} />
             </div>
-            <div className="grid sm:grid-cols-2 gap-6">
+
+            {myExams.length > 0 && (
+                <div className="mt-8 animate-fade-in">
+                    <h3 className="text-xl font-black text-[#1e1b4b] mb-4 flex items-center gap-2">
+                        <Icon name="calendar" className="w-6 h-6 text-indigo-600" />
+                        Minha Agenda de Provas
+                    </h3>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {myExams.map(exam => (
+                            <div key={exam.id} className="bg-white p-5 rounded-xl border-l-4 border-l-indigo-600 border-y border-r border-y-yellow-200 border-r-yellow-200 shadow-sm transition-transform hover:-translate-y-1 hover:shadow-md">
+                                <p className="text-xs font-bold text-stone-500 uppercase mb-1">{classes.find(c => c.id === exam.classId)?.name} {exam.subject && `• ${exam.subject}`}</p>
+                                <p className="font-black text-[#1e1b4b] text-lg leading-tight mb-3">{exam.title}</p>
+                                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-bold">
+                                    <Icon name="calendar" className="w-4 h-4"/> 
+                                    {exam.examDate ? new Date(exam.examDate + 'T12:00:00Z').toLocaleDateString('pt-BR') : ''}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            <div className="grid sm:grid-cols-2 gap-6 pt-4 border-t border-yellow-200 mt-8">
                 <Button variant="secondary" onClick={() => setCurrentView('activities')} className="py-8 justify-start px-8 shadow-sm hover:border-[#f97316]"><Icon name="file-text" className="w-6 h-6 text-[#f97316] mr-3"/> <span className="font-black text-base">Ver Minhas Atividades</span></Button>
                 <Button variant="secondary" onClick={() => setCurrentView('grades')} className="py-8 justify-start px-8 shadow-sm hover:border-[#16a34a]"><Icon name="check-circle" className="w-6 h-6 text-[#16a34a] mr-3"/> <span className="font-black text-base">Acessar Boletim Escolar</span></Button>
             </div>
@@ -817,14 +1111,16 @@ const StudentActivities = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
     const [cancelTarget, setCancelTarget] = useState(null);
+    const [filterClassId, setFilterClassId] = useState('');
 
     const myClassesIds = enrollments.filter(e => e.studentId === user.id).map(e => e.classId);
     const available = activities.filter(a => myClassesIds.includes(a.classId));
+    const filteredAvailable = filterClassId ? available.filter(a => a.classId === filterClassId) : available;
+    const myClasses = classes.filter(c => myClassesIds.includes(c.id));
 
     const handleFileChange = (e) => {
         const selected = e.target.files[0];
         if (selected) {
-            // Verifica o tamanho do arquivo para salvar no Firestore (Máx 800KB para ser seguro)
             if (selected.size > 800 * 1024) {
                 setErrorMsg("O arquivo é muito grande. Para esta versão, o limite é 800 KB.");
                 e.target.value = '';
@@ -834,15 +1130,6 @@ const StudentActivities = () => {
             setErrorMsg('');
             setFile(selected);
         }
-    };
-
-    const convertFileToBase64 = (file) => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = (error) => reject(error);
-        });
     };
 
     const handleSubmit = async (e) => {
@@ -888,22 +1175,50 @@ const StudentActivities = () => {
 
     return (
         <div className="space-y-6 animate-fade-in">
-            <h2 className="text-2xl font-black text-[#1e1b4b] pb-4">Quadro de Atividades</h2>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4">
+                <h2 className="text-2xl font-black text-[#1e1b4b]">Quadro de Atividades</h2>
+                <select
+                    className="w-full sm:w-auto px-4 py-2 bg-white border border-yellow-200 rounded-lg text-sm font-bold text-stone-700 focus:ring-2 focus:ring-[#f97316] outline-none shadow-sm"
+                    value={filterClassId}
+                    onChange={e => setFilterClassId(e.target.value)}
+                >
+                    <option value="">Todas as Minhas Turmas</option>
+                    {myClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+            </div>
+            
             <div className="grid grid-cols-1 gap-6">
-                {available.slice().reverse().map(act => {
+                {filteredAvailable.slice().sort((a, b) => {
+                    const timeA = a.dueDate ? new Date(a.dueDate).getTime() : (a.createdAt || 0);
+                    const timeB = b.dueDate ? new Date(b.dueDate).getTime() : (b.createdAt || 0);
+                    return timeB - timeA;
+                }).map(act => {
                     const mySubmission = submissions.find(s => s.activityId === act.id && s.studentId === user.id);
 
                     return (
-                        <Card key={act.id} className="flex flex-col md:flex-row gap-0 p-0 border-l-4 border-l-[#eab308]">
+                        <Card key={act.id} className={`flex flex-col md:flex-row gap-0 p-0 border-l-4 ${act.isGraded === false ? 'border-l-slate-400' : 'border-l-[#eab308]'}`}>
                             <div className="flex-1 p-6">
-                                <Badge variant="amber">Valor Máximo: {act.value} pts</Badge>
+                                {act.isGraded === false ? (
+                                    <Badge variant="slate">Visto de Participação (Sem Nota)</Badge>
+                                ) : (
+                                    <Badge variant="amber">Valor Máximo: {act.value} pts</Badge>
+                                )}
+                                
                                 <h3 className="text-xl font-black text-[#1e1b4b] mt-3">{act.title}</h3>
                                 <p className="text-sm font-bold text-stone-500 mt-1">{classes.find(c=>c.id===act.classId)?.name}</p>
+                                
                                 {act.subject && (
                                     <div className="mt-2 flex items-center text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded w-max">
                                         <Icon name="tag" className="w-3 h-3 mr-1" /> {act.subject}
                                     </div>
                                 )}
+                                
+                                {act.materialFileData && (
+                                    <a href={act.materialFileData} download={act.materialFileName} className="inline-flex items-center gap-2 px-3 py-2 mt-4 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-sm font-bold hover:bg-indigo-100 transition-colors shadow-sm">
+                                        <Icon name="download" className="w-4 h-4"/> Baixar Material ({act.materialFileName})
+                                    </a>
+                                )}
+
                                 <div className="mt-5 pt-4 border-t border-yellow-100 text-xs font-bold uppercase tracking-wide text-[#f97316] flex items-center gap-2">
                                     <Icon name="clock" className="w-4 h-4"/> Prazo de Entrega: {act.dueDate ? new Date(act.dueDate).toLocaleDateString('pt-BR',{timeZone:'UTC'}) : 'Sem prazo definido'}
                                 </div>
@@ -929,7 +1244,7 @@ const StudentActivities = () => {
                                 <div className="md:w-64 bg-[#16a34a]/10 p-6 border-l border-[#16a34a]/20 flex flex-col justify-center items-center text-center shrink-0">
                                     <Icon name="check-circle" className="w-8 h-8 text-[#16a34a] mb-2"/>
                                     <p className="text-sm font-black text-[#1e1b4b] uppercase">Atividade Presencial</p>
-                                    <p className="text-xs font-bold text-stone-600 mt-1">Aguarde o lançamento da nota</p>
+                                    <p className="text-xs font-bold text-stone-600 mt-1">Aguarde o lançamento do professor</p>
                                 </div>
                             )}
                         </Card>
@@ -946,12 +1261,14 @@ const StudentActivities = () => {
                     )}
                     
                     <div>
-                        <label className="block text-sm font-bold text-stone-700 mb-1.5">Sua Resposta (Texto)</label>
+                        <label className="block text-sm font-bold text-stone-700 mb-1.5">
+                            {selectedActivity?.isGraded === false ? 'Sua Conclusão / Comentário (Texto)' : 'Sua Resposta (Texto)'}
+                        </label>
                         <textarea 
                             rows="4" 
                             value={textResponse} 
                             onChange={e => setTextResponse(e.target.value)} 
-                            placeholder="Digite sua resposta aqui se não for enviar um arquivo..."
+                            placeholder={selectedActivity?.isGraded === false ? "Escreva aqui a sua conclusão sobre o material..." : "Digite sua resposta aqui se não for enviar um arquivo..."}
                             className="w-full px-4 py-2.5 bg-white border border-yellow-200 rounded-lg text-sm focus:ring-2 focus:ring-[#f97316] outline-none shadow-sm"
                         ></textarea>
                     </div>
@@ -964,7 +1281,7 @@ const StudentActivities = () => {
                             <div>
                                 <p className="text-xs font-bold text-orange-800 uppercase tracking-wide mb-1">Atenção: Limite Máximo de 800 KB</p>
                                 <p className="text-xs font-medium text-orange-700 leading-relaxed">
-                                    O sistema utiliza armazenamento otimizado. Por favor, envie documentos leves. Se for uma foto do caderno, reduza a qualidade da câmera. Se for um PDF pesado, utilize um site para comprimir antes de enviar.
+                                    O sistema utiliza armazenamento otimizado. Por favor, envie documentos leves. Se for uma foto do caderno, reduza a qualidade da câmera.
                                 </p>
                             </div>
                         </div>
@@ -1019,9 +1336,13 @@ const StudentActivities = () => {
 const StudentGrades = () => {
     const { user, grades, activities, classes } = useContext(AppContext);
     
-    const myGrades = grades.filter(g => g.studentId === user.id).map(g => ({
-        grade: g, act: activities.find(a => a.id === g.activityId) || {}, cls: classes.find(c => c.id === g.classId) || {}
-    }));
+    // Ignorar atividades que são "Visto" para o cálculo do boletim
+    const myGrades = grades
+        .filter(g => g.studentId === user.id)
+        .map(g => ({
+            grade: g, act: activities.find(a => a.id === g.activityId) || {}, cls: classes.find(c => c.id === g.classId) || {}
+        }))
+        .filter(item => item.act.isGraded !== false);
 
     const groupedGrades = myGrades.reduce((acc, current) => {
         const subject = current.act.subject || 'Geral/Sem Matéria';
@@ -1104,7 +1425,7 @@ const StudentGrades = () => {
             
             {Object.keys(groupedGrades).length === 0 && (
                 <div className="p-8 text-center text-stone-500 font-bold bg-white rounded-xl border border-yellow-200">
-                    Nenhuma nota lançada ainda.
+                    Nenhuma nota lançada ainda. As atividades de Visto não aparecem no boletim.
                 </div>
             )}
         </div>
@@ -1122,7 +1443,14 @@ const MainApp = () => {
     const isProf = user.role === 'professor';
 
     const menu = isProf ? 
-        [{ id: 'dashboard', label: 'Painel Geral', icon: 'home' }, { id: 'classes', label: 'Turmas', icon: 'book' }, { id: 'students', label: 'Alunos', icon: 'users' }, { id: 'activities', label: 'Atividades', icon: 'file-text' }, { id: 'grading', label: 'Lançar Notas', icon: 'check-circle' }] 
+        [
+            { id: 'dashboard', label: 'Painel Geral', icon: 'home' }, 
+            { id: 'classes', label: 'Turmas', icon: 'book' }, 
+            { id: 'students', label: 'Alunos', icon: 'users' }, 
+            { id: 'exams', label: 'Agenda de Provas', icon: 'calendar' },
+            { id: 'activities', label: 'Atividades', icon: 'file-text' }, 
+            { id: 'grading', label: 'Lançar Notas', icon: 'check-circle' }
+        ] 
         : [{ id: 'dashboard', label: 'Meu Painel', icon: 'home' }, { id: 'activities', label: 'Atividades', icon: 'file-text' }, { id: 'grades', label: 'Boletim Escolar', icon: 'check-circle' }];
 
     useEffect(() => {
@@ -1145,6 +1473,7 @@ const MainApp = () => {
         if (isProf) {
             if (currentView === 'classes') return <ProfessorClasses />;
             if (currentView === 'students') return <ProfessorStudents />;
+            if (currentView === 'exams') return <ProfessorExams />;
             if (currentView === 'activities') return <ProfessorActivities />;
             if (currentView === 'grading') return <ProfessorGrading />;
             return <ProfessorDashboard setCurrentView={handleNavigate} />;
@@ -1224,7 +1553,7 @@ const MainApp = () => {
 
 export default function App() {
     const [user, setUser] = useState(() => JSON.parse(sessionStorage.getItem('edugestao_session')));
-    const [data, setData] = useState({ classes: [], allStudents: [], activities: [], submissions: [], enrollments: [], grades: [] });
+    const [data, setData] = useState({ classes: [], allStudents: [], activities: [], submissions: [], enrollments: [], grades: [], exams: [] });
     const [isReady, setIsReady] = useState(false);
     const [dbError, setDbError] = useState(null);
 
@@ -1243,7 +1572,8 @@ export default function App() {
                 const collectionsList = [
                     { key: 'classes', dbName: 'classes' }, { key: 'allStudents', dbName: 'students' },
                     { key: 'activities', dbName: 'activities' }, { key: 'submissions', dbName: 'submissions' },
-                    { key: 'enrollments', dbName: 'enrollments' }, { key: 'grades', dbName: 'grades' }
+                    { key: 'enrollments', dbName: 'enrollments' }, { key: 'grades', dbName: 'grades' },
+                    { key: 'exams', dbName: 'exams' }
                 ];
                 
                 collectionsList.forEach(({key, dbName}) => {
