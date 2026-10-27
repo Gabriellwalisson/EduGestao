@@ -892,7 +892,7 @@ const ProfessorGrading = () => {
                                     const submission = submissions.find(sub => sub.activityId === currentAct.id && sub.studentId === s.id);
                                     
                                     return (
-                                        <tr key={s.id} className="hover:bg-yellow-50/50 transition-colors">
+                                        <tr key={`${s.id}-${currentAct.id}`} className="hover:bg-yellow-50/50 transition-colors">
                                             <td className="px-6 py-4 font-bold text-[#1e1b4b]">{s.name}</td>
                                             
                                             {currentAct.requiresSubmission !== false && (
@@ -917,6 +917,7 @@ const ProfessorGrading = () => {
                                                     </button>
                                                 ) : (
                                                     <input type="number" 
+                                                        key={`input-${s.id}-${currentAct.id}`}
                                                         min="0"
                                                         max={currentAct.value}
                                                         className="w-24 px-3 py-2 border border-yellow-300 rounded-lg text-center font-black text-lg text-[#1e1b4b] focus:border-[#1e1b4b] focus:ring-2 focus:ring-[#1e1b4b] outline-none shadow-sm bg-white" 
