@@ -132,9 +132,11 @@ const globalStyles = `
   .grid-auto-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
   body .bg-\\[\\#fefce8\\] { background-color: #fefce8; background-image: radial-gradient(900px 420px at 100% -8%, rgba(249,115,22,.08), transparent 60%), radial-gradient(800px 420px at -8% 108%, rgba(22,163,74,.08), transparent 60%); background-attachment: fixed; }
   .brand-stripe { height: 4px; background: linear-gradient(90deg, #f97316 0 25%, #eab308 25% 50%, #16a34a 50% 75%, #1e1b4b 75% 100%); }
-  .dots-pattern { background-image: radial-gradient(rgba(255,255,255,.13) 1.2px, transparent 1.2px); background-size: 22px 22px; }
-  .logo-float { animation: logoFloat 6s ease-in-out infinite; }
-  @keyframes logoFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+  .navy-panel { background-color: #1e1b4b !important; background-image: radial-gradient(rgba(255,255,255,.10) 1.2px, transparent 1.2px), linear-gradient(135deg, #1e1b4b 0%, #312e81 100%) !important; background-size: 22px 22px, 100% 100% !important; color: #ffffff !important; }
+  .btn-primary-navy { background-color: #1e1b4b !important; background-image: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%) !important; color: #ffffff !important; }
+  .btn-primary-navy:hover:not(:disabled) { background-color: #312e81 !important; filter: brightness(1.1); }
+  .btn-orange-action { background-color: #f97316 !important; background-image: linear-gradient(135deg, #f97316 0%, #c2410c 100%) !important; color: #ffffff !important; }
+  .logo-float { transform: none !important; animation: none !important; }
   @keyframes modalIn { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
   .modal-in { animation: modalIn .22s cubic-bezier(0.16, 1, 0.3, 1) both; }
   table tbody tr { transition: background-color .15s; }
@@ -207,7 +209,7 @@ const LogoEscola = ({ className = "w-8 h-8" }) => (
 
 const Button = ({ children, variant = 'primary', icon, onClick, className = '', type = 'button', disabled = false }) => {
     const variants = {
-        primary: "bg-gradient-to-br from-[#1e1b4b] to-[#312e81] text-white hover:shadow-lg hover:shadow-[#1e1b4b]/25 hover:-translate-y-px active:translate-y-0 active:scale-[.98] border border-transparent disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none",
+        primary: "btn-primary-navy text-white hover:shadow-lg hover:-translate-y-px active:translate-y-0 active:scale-[.98] border border-transparent disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none",
         secondary: "bg-white text-stone-800 hover:bg-yellow-50 hover:border-[#f97316]/60 active:scale-[.98] shadow-sm border border-yellow-200 disabled:opacity-50 disabled:cursor-not-allowed",
         danger: "bg-red-50 text-red-700 hover:bg-red-100 active:scale-[.98] border border-red-200 disabled:opacity-50 disabled:cursor-not-allowed",
     };
@@ -304,18 +306,17 @@ const Badge = ({ children, variant = 'slate' }) => {
 };
 
 const HeroBanner = ({ title, subtitle, chips = [] }) => (
-    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1e1b4b] via-[#1e1b4b] to-[#312e81] text-white p-6 sm:p-8 pb-8 shadow-[0_24px_50px_-24px_rgba(30,27,75,.6)]">
-        <div className="dots-pattern absolute inset-0 opacity-60 pointer-events-none"></div>
-        <div className="absolute -top-16 -right-10 w-56 h-56 rounded-full bg-[#f97316] blur-[70px] opacity-30 pointer-events-none"></div>
-        <div className="absolute -bottom-20 -left-10 w-56 h-56 rounded-full bg-[#16a34a] blur-[70px] opacity-25 pointer-events-none"></div>
+    <div className="relative overflow-hidden rounded-3xl navy-panel text-white p-6 sm:p-8 pb-8 shadow-[0_24px_50px_-24px_rgba(30,27,75,.6)]">
+        <div className="absolute -top-16 -right-10 w-56 h-56 rounded-full bg-[#f97316] blur-[70px] opacity-25 pointer-events-none"></div>
+        <div className="absolute -bottom-20 -left-10 w-56 h-56 rounded-full bg-[#16a34a] blur-[70px] opacity-20 pointer-events-none"></div>
         <div className="relative flex items-center justify-between gap-6">
             <div className="min-w-0">
-                <p className="text-[#eab308] text-xs font-black uppercase tracking-[.25em] mb-2">{todayLabel()}</p>
-                <h2 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">{title}</h2>
-                {subtitle && <p className="text-indigo-200 text-sm font-medium mt-2">{subtitle}</p>}
-                {chips.length > 0 && <div className="flex flex-wrap gap-2 mt-5">{chips.map(c => <span key={c} className="px-3 py-1.5 rounded-full bg-white/10 border border-white/10 text-xs font-bold backdrop-blur-sm">{c}</span>)}</div>}
+                <p className="text-[#fde047] text-xs font-black uppercase tracking-[.25em] mb-2">{todayLabel()}</p>
+                <h2 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight text-white">{title}</h2>
+                {subtitle && <p className="text-indigo-100 text-sm font-medium mt-2">{subtitle}</p>}
+                {chips.length > 0 && <div className="flex flex-wrap gap-2 mt-5">{chips.map(c => <span key={c} className="px-3 py-1.5 rounded-full bg-white/15 border border-white/25 text-white text-xs font-bold backdrop-blur-sm">{c}</span>)}</div>}
             </div>
-            <div className="hidden sm:flex shrink-0 w-24 h-24 rounded-3xl bg-white items-center justify-center shadow-2xl ring-8 ring-white/10 logo-float"><LogoEscola className="w-14 h-14" /></div>
+            <div className="hidden sm:flex shrink-0 w-24 h-24 rounded-3xl bg-white items-center justify-center shadow-2xl ring-8 ring-white/10"><LogoEscola className="w-14 h-14" /></div>
         </div>
         <div className="brand-stripe absolute bottom-0 left-0 right-0"></div>
     </div>
@@ -347,26 +348,26 @@ const LoginScreen = () => {
 
     return (
         <div className="min-h-screen flex bg-[#fefce8]">
-            <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-[#1e1b4b] via-[#1e1b4b] to-[#312e81] dots-pattern text-white p-12 flex-col justify-between relative overflow-hidden">
+            <div className="hidden lg:flex w-1/2 navy-panel text-white p-12 flex-col justify-between relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#f97316] rounded-full blur-[120px] opacity-20 -mr-40 -mt-40 pointer-events-none"></div>
                 <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[#16a34a] rounded-full blur-[100px] opacity-20 -ml-20 -mb-20 pointer-events-none"></div>
                 <div className="relative z-10">
-                    <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mb-8 shadow-2xl ring-8 ring-white/10 logo-float">
+                    <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mb-8 shadow-2xl ring-8 ring-white/10">
                         <LogoEscola className="w-12 h-12" />
                     </div>
-                    <h1 className="text-4xl font-black tracking-tight mb-2">E.E. Edson Alves Pereira</h1>
-                    <p className="text-[#eab308] font-bold text-xl uppercase tracking-widest">Portal Acadêmico</p>
+                    <h1 className="text-4xl font-black tracking-tight mb-2 text-white">E.E. Edson Alves Pereira</h1>
+                    <p className="text-[#fde047] font-bold text-xl uppercase tracking-widest">Portal Acadêmico</p>
                     <div className="flex flex-wrap gap-2 mt-8">
                         {[['Atividades', '#f97316'], ['Notas', '#eab308'], ['Frequência', '#16a34a'], ['Provas', '#a5b4fc']].map(([t, c]) => (
-                            <span key={t} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/10 text-xs font-bold text-white/90 backdrop-blur-sm"><span className="w-2 h-2 rounded-full" style={{ background: c }}></span>{t}</span>
+                            <span key={t} className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/15 border border-white/25 text-xs font-bold text-white backdrop-blur-sm"><span className="w-2.5 h-2.5 rounded-full" style={{ background: c }}></span>{t}</span>
                         ))}
                     </div>
                 </div>
-                <p className="text-indigo-200 text-sm relative z-10 font-medium">Montezuma/MG • Sistema de Gestão Educacional</p>
+                <p className="text-indigo-100 text-sm relative z-10 font-medium">Montezuma/MG • Sistema de Gestão Educacional</p>
             </div>
             
             <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
-                <div className="w-full max-w-sm animate-fade-in bg-white/85 backdrop-blur rounded-3xl border border-yellow-200 shadow-[0_24px_60px_-24px_rgba(30,27,75,.4)] overflow-hidden">
+                <div className="w-full max-w-sm animate-fade-in bg-white rounded-3xl border border-yellow-200 shadow-[0_24px_60px_-24px_rgba(30,27,75,.4)] overflow-hidden">
                     <div className="brand-stripe"></div>
                     <div className="p-8">
                     <div className="lg:hidden flex flex-col items-center mb-10">
@@ -377,14 +378,14 @@ const LoginScreen = () => {
                     </div>
                     
                     <h2 className="text-3xl font-black text-[#1e1b4b] mb-2">Acesso restrito</h2>
-                    <p className="text-sm text-stone-500 mb-8 font-medium">Insira suas credenciais para continuar.</p>
+                    <p className="text-sm text-stone-600 mb-8 font-medium">Insira suas credenciais para continuar.</p>
 
                     {error && <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg font-bold">{error}</div>}
                     
                     <form onSubmit={handleLogin} className="space-y-5">
                         <Input label="Usuário de Acesso" icon="user" value={username} onChange={(e) => setUsername(e.target.value)} required />
                         <Input label="Senha" type="password" icon="lock" value={password} onChange={(e) => setPassword(e.target.value)} required />
-                        <Button type="submit" className="w-full py-3.5 mt-4 text-base shadow-lg shadow-[#1e1b4b]/20">Entrar no Sistema</Button>
+                        <Button type="submit" className="w-full py-3.5 mt-4 text-base shadow-lg">Entrar no Sistema</Button>
                     </form>
                     </div>
                 </div>
@@ -2022,7 +2023,7 @@ const StudentActivities = () => {
                                             )}
                                         </div>
                                     ) : (
-                                        <Button className="w-full bg-gradient-to-br from-[#f97316] to-[#c2410c] hover:shadow-lg hover:shadow-[#f97316]/25 hover:-translate-y-px active:translate-y-0 text-white" onClick={() => { setSelectedActivity(act); setErrorMsg(''); }}>Responder Agora</Button>
+                                        <Button className="w-full btn-orange-action hover:shadow-lg hover:-translate-y-px active:translate-y-0 text-white" onClick={() => { setSelectedActivity(act); setErrorMsg(''); }}>Responder Agora</Button>
                                     )}
                                 </div>
                             ) : (
@@ -2152,11 +2153,11 @@ const StudentGrades = () => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-[#1e1b4b] rounded-2xl p-8 text-white shadow-lg relative overflow-hidden">
+                <div className="navy-panel rounded-2xl p-8 text-white shadow-lg relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full blur-[50px] opacity-10 -mr-10 -mt-10"></div>
-                    <p className="text-indigo-200 text-sm font-bold uppercase tracking-wider">Aproveitamento Global</p>
-                    <p className="text-6xl font-black mt-3 tracking-tight">{globalPercent}%</p>
-                    <div className="mt-4 w-full h-2.5 bg-white/15 rounded-full overflow-hidden">
+                    <p className="text-indigo-100 text-sm font-bold uppercase tracking-wider">Aproveitamento Global</p>
+                    <p className="text-6xl font-black mt-3 tracking-tight text-white">{globalPercent}%</p>
+                    <div className="mt-4 w-full h-2.5 bg-white/20 rounded-full overflow-hidden">
                         <div className="h-full bg-gradient-to-r from-[#f97316] via-[#eab308] to-[#16a34a] rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Number(globalPercent))}%` }}></div>
                     </div>
                 </div>
